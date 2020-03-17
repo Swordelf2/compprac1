@@ -1,9 +1,9 @@
 all: compprac1
 
-CC=g++
-LD=g++
-CFLAGS=-g -std=gnu++17 -Wall -Wextra
-LDFLAGS=-Lqbe/lib
+CC=gcc
+LD=gcc
+CFLAGS=-g -std=gnu++17 -Wall -Wextra -Iqbe/include
+LDFLAGS=-Lqbe/lib -lqbe
 
 main.o: main.cpp
 	$(CC) -c $(CFLAGS) $(LDFLAGS) $< -o $@
