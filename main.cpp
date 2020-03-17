@@ -1,50 +1,37 @@
-#include <iostream>
-
-#ifdef __cplusplus
 #define export exports
 extern "C" {
 #include <qbe/all.h>
 }
 #undef export
-#else
-#include <qbe/all.h>
-#endif
 
-#include <stdio.h>
-
-static int useful(Ins* i) {
-    // ...
-}
+#include <iostream>
 
 static void readfn (Fn *fn) {
-    fillrpo(fn); // Traverses the CFG in reverse post-order, filling blk->id.
-    fillpreds(fn);
-    filluse(fn);
-    ssa(fn);
+    std::cout << Tmp0 << std::endl << std::endl;
 
-    //...
-    for (Blk *blk = fn->start; blk; blk = blk->link) {
-        for (Ins *i = blk->ins; i < &blk->ins[blk->nins]; ++i) {
-            if (!useful(i)) {
-                i->op = Onop;
-                i->to = R;
-                i->arg[0] = R;
-                i->arg[1] = R;
-            }
-        }
-        // ...
+    for (int i = 0; i < fn->ntmp; ++i) {
+        std::cout << i << ' ' << fn->tmp[i].name << std::endl;
     }
 
-    fillpreds(fn); // Either call this, or keep track of preds manually when rewriting branches.
-    fillrpo(fn); // As a side effect, fillrpo removes any unreachable blocks.
-    printfn(fn, stdout);
+    /*
+    for (Blk *blk = fn->start; blk; blk = blk->link) {
+        printf("@%s", blk->name);
+        printf("\n\trd_in = ");
+
+        if (blk->nins && Tmp0 <= blk->ins->to.val) {
+            //printf("@%s%%%s", blk->name, fn->tmp[blk->ins->to.val].name);
+        }
+    }
+    */
 }
 
 static void readdat (Dat *dat) {
   (void) dat;
 }
 
+char *STDIN_NAME = "<stdin>";
+
 int main () {
-  parse(stdin, "<stdin>", readdat, readfn);
+  parse(stdin, STDIN_NAME, readdat, readfn);
   freeall();
 }

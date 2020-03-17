@@ -1,14 +1,11 @@
-export function w $bar() {
+function w $main() {
 @start
-      %x =w copy 1
-      jnz %x, @d1, @d2
-@d1
-      %y =w copy 1
-      %x =w mul %x, %y
-      jmp @end
-@d2
-      %z = w copy 1
-      jmp @end
+    %x =w copy 5
+@loop
+    %x =w mul %x, %x
+    %cond =w csgew %x, 200
+    jnz %cond, @end, @loop
 @end
-      ret %x
+    %t =w call $printf(l $fmt, w %x)
+    ret 0
 }
