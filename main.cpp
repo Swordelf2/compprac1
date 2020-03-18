@@ -9,6 +9,7 @@ extern "C" {
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
+#include <queue>
 
 // Definition of a variable
 struct Def {
@@ -46,8 +47,10 @@ typedef std::unordered_set<Def, DefHash> Defs;
 struct BlkInfo {
     // Pointer to the block
     Blk* blk;
-    // `Input` of the dataflow equation
+    // `Input` of this block in the dataflow equation
     Defs input;
+    // 'Output' of this block in the dataflow equation
+    Defs output;
     // Definitions, generated in this block
     Defs gen;
     // Variables, whose definitions are killed in this block
@@ -55,11 +58,18 @@ struct BlkInfo {
 };
 
 
-const char *tmp_name(uint id, Fn* fn) {
+// TODO: remove this function probably
+// Retrieve the name of a temporary variable
+static const char *tmp_name(uint id, Fn* fn) {
     return fn->tmp[id].name;
 }
 
-
+// Insert all defs from `defs2` into `defs1`
+static inline void defs_unite(Defs& defs1, const Defs& defs2) {
+    for (const Def& def : defs2) {
+        defs1.insert(def);
+    }
+}
 
 static void readfn (Fn *fn) {
     // Fill the `pred` field for each block
@@ -77,6 +87,7 @@ static void readfn (Fn *fn) {
                 &blk,
                 Defs(),
                 Defs(),
+                Defs(),
                 std::unordered_set<uint>()
             }
         ));
@@ -84,7 +95,6 @@ static void readfn (Fn *fn) {
 
     // Construct defs for each var
     std::vector<Defs> var_defs(fn->ntmp - Tmp0);
-    std::cout << fn->ntmp << ' ' << Tmp0 << std::endl;
     for (uint i = 0; i < fn->nblk; ++i) {
         const Blk &blk = *fn->rpo[i];
         for (uint ins_num = 0; ins_num < blk.nins; ++ins_num) {
@@ -110,6 +120,7 @@ static void readfn (Fn *fn) {
         }
     }
 
+    /*
     // DEBUG OUTPUT - print all gens and killcs for each block
     for (uint i = 0; i < fn->nblk; ++i) {
         const Blk &blk = *fn->rpo[i];
@@ -125,6 +136,70 @@ static void readfn (Fn *fn) {
             std::cout << "\t\t" << fn->tmp[var].name << std::endl;
         }
     }
+    */
+
+    /* Construct an MFP solution */
+
+    // Add all the block ids to the worklist in the reverse post order
+    std::queue<uint> worklist;
+    for (uint i = 0; i < fn->nblk; ++i) {
+        worklist.push(fn->rpo[i]->id);
+    }
+
+    // Pop from the worklist while it's not empty
+    while (!worklist.empty()) {
+        uint block_id = worklist.front();
+        worklist.pop();
+
+        BlkInfo& blk_info = id2blkinfo[block_id];
+
+        // Unite the outputs of preds
+        Defs outputs_union;
+        for (uint pred_num = 0; pred_num < blk_info.blk->npred; ++pred_num) {
+            const Blk& pred = *blk_info.blk->pred[pred_num];
+            const BlkInfo& pred_info = id2blkinfo[pred.id];
+            defs_unite(outputs_union, pred_info.output);
+        }
+
+        // Update the input with this union, and if changed,
+        // push all the successors of this block to the worklist
+        // and update the output for the current block
+        if (blk_info.input != outputs_union) {
+            blk_info.input = std::move(outputs_union);
+            if (blk_info.blk->s1) {
+                worklist.push(blk_info.blk->s1->id);
+            }
+            if (blk_info.blk->s2) {
+                worklist.push(blk_info.blk->s2->id);
+            }
+
+            // Update the output by applying the transfer function (uniting with GEN
+            // and subtracting KILL) to the input
+            blk_info.output = blk_info.input;
+            // Unite with GEN
+            defs_unite(blk_info.output, blk_info.gen);
+            // Subtract KILL
+            for (uint var : blk_info.kill) {
+                for (const Def& def : var_defs[var - Tmp0]) {
+                    blk_info.output.erase(def);
+                }
+            }
+        }
+    }
+
+    // Print the result - input of each block
+    for (uint i = 0; i < fn->nblk; ++i) {
+        const Blk& blk = *fn->rpo[i];
+        const BlkInfo& blk_info = id2blkinfo[blk.id];
+        std::cout << '@' << blk.name << std::endl <<
+            "\trd_in = ";
+        for (const Def& def : blk_info.input) {
+            std::cout << '@' << id2blkinfo[def.blk_id].blk->name << '%' << 
+                fn->tmp[def.tmp_idx].name << ' ';
+        }
+        std::cout << std::endl;
+    }
+
 }
 
 static void readdat (Dat *dat) {
