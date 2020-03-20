@@ -112,16 +112,19 @@ static void readfn (Fn *fn) {
         BlkInfo &blk_info = id2blkinfo[blk.id];
         for (uint ins_num = 0; ins_num < blk.nins; ++ins_num) {
             const Ins &ins = blk.ins[ins_num];
-            // `ins.to.val` is the def of this instruction
-            // Add this definition to the GEN of this block
-            blk_info.gen.insert(Def { blk.id, ins.to.val });
-            // Add this variable to the KILL of this block
-            blk_info.kill.insert(ins.to.val);
+            if (ins.to.val >= Tmp0) {
+                // `ins.to.val` is the def of this instruction
+                // Add this definition to the GEN of this block
+                blk_info.gen.insert(Def { blk.id, ins.to.val });
+                // Add this variable to the KILL of this block
+                blk_info.kill.insert(ins.to.val);
+            }
         }
     }
 
     /*
     // DEBUG OUTPUT - print all gens and killcs for each block
+    std::cout << "GENs and KILLs" << std::endl;
     for (uint i = 0; i < fn->nblk; ++i) {
         const Blk &blk = *fn->rpo[i];
         const BlkInfo &blk_info = id2blkinfo[blk.id];
@@ -161,28 +164,28 @@ static void readfn (Fn *fn) {
             defs_unite(outputs_union, pred_info.output);
         }
 
-        // Update the input with this union, and if changed,
-        // push all the successors of this block to the worklist
-        // and update the output for the current block
-        if (blk_info.input != outputs_union) {
-            blk_info.input = std::move(outputs_union);
+        blk_info.input = std::move(outputs_union);
+
+        // Update the output by applying the transfer function (subtracting KILL
+        // and uniting with GEN) to the input
+        Defs new_output = blk_info.input;
+        // Subtract KILL
+        for (uint var : blk_info.kill) {
+            for (const Def& def : var_defs[var - Tmp0]) {
+                new_output.erase(def);
+            }
+        }
+        // Unite with GEN
+        defs_unite(new_output, blk_info.gen);
+
+        // If the output has changed, push the successors to the worklist
+        if (blk_info.output != new_output) {
+            blk_info.output = std::move(new_output);
             if (blk_info.blk->s1) {
                 worklist.push(blk_info.blk->s1->id);
             }
             if (blk_info.blk->s2) {
                 worklist.push(blk_info.blk->s2->id);
-            }
-
-            // Update the output by applying the transfer function (uniting with GEN
-            // and subtracting KILL) to the input
-            blk_info.output = blk_info.input;
-            // Unite with GEN
-            defs_unite(blk_info.output, blk_info.gen);
-            // Subtract KILL
-            for (uint var : blk_info.kill) {
-                for (const Def& def : var_defs[var - Tmp0]) {
-                    blk_info.output.erase(def);
-                }
             }
         }
     }
