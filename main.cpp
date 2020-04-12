@@ -58,12 +58,6 @@ struct BlkInfo {
 };
 
 
-// TODO: remove this function probably
-// Retrieve the name of a temporary variable
-static const char *tmp_name(uint id, Fn* fn) {
-    return fn->tmp[id].name;
-}
-
 // Insert all defs from `defs2` into `defs1`
 static inline void defs_unite(Defs& defs1, const Defs& defs2) {
     for (const Def& def : defs2) {
